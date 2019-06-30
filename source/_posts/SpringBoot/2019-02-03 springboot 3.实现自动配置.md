@@ -212,7 +212,7 @@ public class HttpEncodingProperties {
 spring.http.encoding.charset=GBK1
 ```
 
-这里有个地方值得一提，在配置文件中的GBK明明是字符串类型的值，而在对应的配置属性类这个属性是Charset类型的，那么肯定是有一个步骤完成了从字符串到Charset类型的转换工作。完成这个步骤的就是Spring框架中的Conversion API。这里只贴一张相关的图，不进行深入分析，感兴趣的同学可以在配置属性类的setCharset方法上打个断点然后深挖一下。![genericConverter](../images/SpringBoot/SpringBoot_genericConverter.png)
+这里有个地方值得一提，在配置文件中的GBK明明是字符串类型的值，而在对应的配置属性类这个属性是Charset类型的，那么肯定是有一个步骤完成了从字符串到Charset类型的转换工作。完成这个步骤的就是Spring框架中的Conversion API。这里只贴一张相关的图，不进行深入分析，感兴趣的同学可以在配置属性类的setCharset方法上打个断点然后深挖一下。![genericConverter](/images/SpringBoot/SpringBoot_genericConverter.png)
 
 从这张图可以看出，Spring Conversion API中维护了一系列Converters，它实际上是一个从源类型到目标类型的Map对象。从String类型到Charset类型的Converter也被注册到了这个Map对象中。因此，当发现配置文件中的值类型和配置Java类中的字段类型不匹配时，就会去尝试从这个Map中找到相应的Converter，然后进行转换。
 

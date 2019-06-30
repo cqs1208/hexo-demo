@@ -1,0 +1,214 @@
+---
+layout: post
+title: spring容器中的aware接口介绍
+tags:
+- SpringCore
+categories: SpringCore
+description: spring
+---
+
+Spring中提供了各种Aware接口，比较常见的。。。
+
+<!-- more --> 
+
+## 1 spring容器中的aware接口介绍
+
+​	Spring中提供了各种Aware接口，比较常见的如BeanFactoryAware, BeanNameAware, ApplicationContextAware, BeanClassLoaderAware等，方便从上下文中获取当前的运行环境。我们先从使用的角度来说明aware接口的使用方式，举例如我们想得到当前的BeanFactory，我们可以让我们的实现类继承BeanFactoryAware接口，然后通过接口注入的方式得到当前容器中的BeanFactory：
+
+```java
+public class Fruit implements BeanFactoryAware {
+    private BeanFactory beanFactory;
+ 
+    @Override
+    public void setBeanFactory(BeanFactory beanFactory) throws BeansException {
+        this.beanFactory = beanFactory;
+    }
+}
+```
+
+​	我们的Fruit类实现了aware接口，如果我们直接在应用中new一个Fruit的对象，当然是拿不到beanFactory变量的，我们必须在spring的配置文件中声明我们的fruit对象才行，也就是说fruit对象必须交给容器进行管理，容器帮你把各种aware接口中想要注入的对象设置到bean中。具体看容器管理aware接口的代码实现，代码在AbstractAutowireCapableBeanFactory的initializeBean方法中：
+
+```java
+protected Object initializeBean(String beanName, Object bean, RootBeanDefinition mbd) {
+    // 判断对象实现的接口类型，处理特定的三种接口类型：BeanNameAware、BeanClassLoaderAware和BeanFactoryAware。
+    if (bean instanceof BeanNameAware) {
+        ((BeanNameAware) bean).setBeanName(beanName);
+    }
+ 
+    if (bean instanceof BeanClassLoaderAware) {
+        ((BeanClassLoaderAware) bean).setBeanClassLoader(getBeanClassLoader());
+    }
+ 
+    if (bean instanceof BeanFactoryAware) {
+        ((BeanFactoryAware) bean).setBeanFactory(this);
+    }
+    // 开始Bean初始化前处理、初始化、初始化后处理
+    Object wrappedBean = bean;
+    if (mbd == null || !mbd.isSynthetic()) {
+        wrappedBean = applyBeanPostProcessorsBeforeInitialization(wrappedBean, beanName);
+    }
+ 
+    try {
+        invokeInitMethods(beanName, wrappedBean, mbd);
+    }
+    catch (Throwable ex) {
+        throw new BeanCreationException(
+                (mbd != null ? mbd.getResourceDescription() : null),
+                beanName, "Invocation of init method failed", ex);
+    }
+ 
+    if (mbd == null || !mbd.isSynthetic()) {
+        wrappedBean = applyBeanPostProcessorsAfterInitialization(wrappedBean, beanName);
+    }
+    return wrappedBean;
+}
+```
+
+​	可以看出来，aware接口的各种处理是在属性设置完成之后、bean初始化之前完成的。显然的，如果我们直接new出来一个bean，这些框架性的特性是没有使用到的。除了BeanFactoryAware、BeanNameAware、BeanClassLoaderAware之外的那些aware接口，比如ApplicationContextAware，再比如Webx中的自定义aware接口，它们又是怎么做到接口注入的呢？原来在应用中创建上下文容器时会注册一个BeanPostProcessor------ApplicationContextAwareProcessor，在这个类里面进行了context的注入，这样我们就能能够拿到bean中的context对象：
+
+```java
+public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
+    if (bean instanceof ResourceLoaderAware) {
+        ((ResourceLoaderAware) bean).setResourceLoader(this.applicationContext);
+    }
+    if (bean instanceof ApplicationEventPublisherAware) {
+        ((ApplicationEventPublisherAware) bean).setApplicationEventPublisher(this.applicationContext);
+    }
+    if (bean instanceof MessageSourceAware) {
+        ((MessageSourceAware) bean).setMessageSource(this.applicationContext);
+    }
+    if (bean instanceof ApplicationContextAware) {
+        ((ApplicationContextAware) bean).setApplicationContext(this.applicationContext);
+    }
+    return bean;
+}
+```
+
+​	那么容器是在什么时候把ApplicationContextAwareProcessor的对象注册到context的BeanPostProcessor列表中的呢，奥秘在org.springframework.context.support.AbstractApplicationContext.prepareBeanFactory(ConfigurableListableBeanFactory)方法中：
+
+```java
+// Tell the internal bean factory to use the context's class loader.
+beanFactory.setBeanClassLoader(getClassLoader());
+ 
+// Populate the bean factory with context-specific resource editors.
+beanFactory.addPropertyEditorRegistrar(new ResourceEditorRegistrar(this));
+ 
+// Configure the bean factory with context callbacks.
+beanFactory.addBeanPostProcessor(new ApplicationContextAwareProcessor(this)); //在这里注册了我们想要的BeanPostProcessor
+beanFactory.ignoreDependencyInterface(ResourceLoaderAware.class);
+beanFactory.ignoreDependencyInterface(ApplicationEventPublisherAware.class);
+beanFactory.ignoreDependencyInterface(MessageSourceAware.class);
+beanFactory.ignoreDependencyInterface(ApplicationContextAware.class);
+```
+
+## 2 自定义aware接口实现
+
+​	了解了个中原理，那么自定义aware接口实现起来并不复杂。我们只需要2步操作：1.实现我们aware接口的postprocessor，并在容器中注册；2.bean实体类集成我们自定义的aware接口并实现。代码如下：Aware接口比较简单，就做一件事情，把Apple对象注入。
+
+```java
+public interface AppleAware {
+    void setApple(Apple a);
+}
+```
+
+我们的BeanPostProcessor会检查是否是AppleAware接口，因为注册到容器的BeanPostProcessor会对每一个bean都做一次扫描：
+
+```java
+public class AppleAwarePostProcessor implements BeanPostProcessor {
+ 
+    private Apple a;
+ 
+    public AppleAwarePostProcessor(Apple a) {
+        this.a = a;
+    }
+ 
+    /* (non-Javadoc)
+     * @see org.springframework.beans.factory.config.BeanPostProcessor#postProcessBeforeInitialization(java.lang.Object, java.lang.String)
+     */
+    @Override
+    public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
+        if(bean instanceof AppleAware) {
+            ((AppleAware) bean).setApple(a);
+        }
+        return bean;
+    }
+ 
+    /* (non-Javadoc)
+     * @see org.springframework.beans.factory.config.BeanPostProcessor#postProcessAfterInitialization(java.lang.Object, java.lang.String)
+     */
+    @Override
+    public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+        // TODO Auto-generated method stub
+        return bean;
+    }
+ 
+}
+```
+
+实体类Market实现了AppleAware接口，能够得到Apple对象的注入：
+
+```java
+public class Market implements AppleAware {
+ 
+    private Apple a;
+ 
+    @Override
+    public void setApple(Apple a) {
+         this.a = a;
+    }
+ 
+    public String getName() {
+        return a.getName();
+    }
+ 
+}
+```
+
+Apple类
+
+```java
+
+@Data
+public class Apple {
+
+    private String name = "qignsong";
+
+}
+```
+
+Xml配置
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans
+        xmlns="http://www.springframework.org/schema/beans"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:context="http://www.springframework.org/schema/context"
+        xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.2.xsd http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <!-- 自动扫描web包 ,将带有注解的类 纳入spring容器管理 -->
+    <context:component-scan base-package="com.spring"></context:component-scan>
+
+    <bean id="apple" class="com.spring.dao.doMain.Apple"> </bean>
+
+    <bean id="market" class="com.spring.service.impl.Market"> </bean>
+</beans>
+```
+
+最后是我们的测试类，一定要把我们的BeanPostProcessor加入到当前容器中，这一点非常重要：
+
+```java
+public class TestAware {
+    public static void main(String args[]) {
+        ConfigurableBeanFactory beanFactory = new XmlBeanFactory(new ClassPathResource("applicationContext.xml"));
+        BeanPostProcessor bpp = new AppleAwarePostProcessor((Apple)beanFactory.getBean("apple"));
+    // 工厂对象中加入我们自定义的BeanPostProcessor
+        beanFactory.addBeanPostProcessor(bpp);
+        Market market = (Market) beanFactory.getBean("market");
+        System.out.println(market.getName());
+    }
+}
+```
+
+
+
