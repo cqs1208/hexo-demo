@@ -13,7 +13,7 @@ Spring Cloud Eureka 是 Spring Cloud Netflix 微服务套件中的 部分
 
 # 服务治理 Spring Cloud Eureka
 
-​	Spring Cloud Eureka 是 Spring Cloud Netflix 微服务套件中的 部分， 它基于 Netflix Eureka 做了二次封装， 主要负责完成微服务架构中的服务治理功能。 Spring Cloud 通过为Eureka 增加了 Spring Boot 风格的自动化配置，我们只需通过简单引入依赖和注解配置就能让 Spring Boot 构建的微服务应用轻松地与 Eureka 服务治理体系进行整合。
+	Spring Cloud Eureka 是 Spring Cloud Netflix 微服务套件中的 部分， 它基于 Netflix Eureka 做了二次封装， 主要负责完成微服务架构中的服务治理功能。 Spring Cloud 通过为Eureka 增加了 Spring Boot 风格的自动化配置，我们只需通过简单引入依赖和注解配置就能让 Spring Boot 构建的微服务应用轻松地与 Eureka 服务治理体系进行整合。
 
 	在本章中， 我们将指引读者学习下面这些核心内容， 并构建起用于服务治理的基础设施
 
@@ -38,53 +38,73 @@ Spring Cloud Eureka 是 Spring Cloud Netflix 微服务套件中的 部分
 
 	Spring Cloud Eureka， 使用 Netflix Eureka 来实现服务注册与发现， 它既包含了服务端组件，也包含了客户端组件，并且服务端与客户端均采用Java编写，所以Eureka主要适用于通过Java实现的分布式系统，或是与NM兼容语言构建的系统。但是，由于Eureka服 务端的服务治理机制提供了完备的RESTfulAPI，所以它也支持将非Java语言构建的微服 务应用纳入Eureka的服务治理体系中来。只是在使用其他语言平台的时候，需要自己来实现Eureka的客户端程序。不过庆幸的是，在目前几个较为流行的开发平台上，都己经有了一些针对Eureka注册中心的客户端实现框架，比如.NET平台的Steeltoe、Node.的eureka-js-client等。
 	Eureka服务端，我们也称为服务注册中心。它同其他服务注册中心一样，支持高可用配置。它依托于强一致性提供良好的服务实例可用性，可以应对多种不同的故障场景。如果Eureka以集群模式部署，当集群中有分片出现故障时，那么Eureka就转入自我保护模式。它允许在分片故障期间继续提供服务的发现和注册，当故障分片恢复运行时，集群中的其他分片会把它们的状态再次同步回来。以在AWS上的实践为例，Netflix推荐每个可用的区域运行一个Eureka服务端，通过它来形成集群。不同可用区域的服务注册中心通过异步模式互相复制各自的状态，这意味着在任意给定的时间点每个实例关于所有服务的状态是有细微差别的。
-
+	
 	Eureka客户端，主要处理服务的注册与发现。客户端服务通过注解和参数配置的方式，嵌入在客户端应用程序的代码中，在应用程序运行时，Eureka客户端向注册中心注册自身提供的服务并周期性地发送心跳来更新它的服务租约。同时，它也能从服务端查询当前注册的服务信息并把它们缓存到本地并周期性地刷新服务状态。
-
+	
 	下面我们来构建一些简单示例，学习如何使用Eureka构建注册中心以及进行注册与发 现服务。
 
 ## 3 创建服务注册中心
 
-	首先，创建一个基础的SpringBoot工程，命名为eureka-server，并在pom.xml 中引入必要的依赖内容，代码如下：
+首先，创建一个基础的SpringBoot工程，命名为cloud-parent，并在pom.xml 中引入必要的依赖内容，代码如下：
 
 ```java
- <parent>
+  <!-- springboot parent 依赖-->
+    <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>1.5.6.RELEASE</version>
-        <relativePath/> <!-- lookup parent from repository -->
+        <version>2.0.6.RELEASE</version>
+        <relativePath/>
     </parent>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <java.version>1.8</java.version>
+        <lcn.version>4.2.0</lcn.version>
     </properties>
-    <dependencies>
-        <dependency>
-			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-starter-eureka-server</artifactId>
-		</dependency>
-    </dependencies>
+
+
+    <!-- 全局Pom依赖 -->
     <dependencyManagement>
-		<dependencies>
-			<dependency>
-				<groupId>org.springframework.cloud</groupId>
-				<artifactId>spring-cloud-dependencies</artifactId>
-				<version>${spring-cloud.version}</version>
-				<type>pom</type>
-				<scope>import</scope>
-			</dependency>
-		</dependencies>
-	</dependencyManagement>
-	<build>
-		<plugins>
-			<plugin>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-maven-plugin</artifactId>
-			</plugin>
-		</plugins>
-	</build>
+        <dependencies>
+
+            <!-- spring cloud 全局Pom依赖 -->
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>Finchley.SR2</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+```
+
+然后新建子模块eureka-server，并在pom.xml 中引入必要的依赖内容，代码如下：
+
+```shell
+ <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- eureka client 依赖-->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
+        </dependency>
+    </dependencies>
 ```
 
 通过@EnableEurekaServer注解启动一个服务注册中心提供给其他应用进行对话。
@@ -100,7 +120,7 @@ public class EurekaServerApplication {
 }
 ```
 
-	在默认设置下， 该服务注册中心也会将自己作为客户端来尝试注册它自己， 所以我们需要禁用它的客户端注册行为，只需在application.properties中增加如下配置：
+在默认设置下， 该服务注册中心也会将自己作为客户端来尝试注册它自己， 所以我们需要禁用它的客户端注册行为，只需在application.properties中增加如下配置：
 
 ```java
 server:
@@ -117,69 +137,37 @@ eureka:
       defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/
 ```
 
-	由于后续内容也都会在本地运行， 为了与后续要进行注册的服务区分， 这里将服务注册中心的端口通过 server.port 属性设置为 1111。
+由于后续内容也都会在本地运行， 为了与后续要进行注册的服务区分， 这里将服务注册中心的端口通过 server.port 属性设置为 1111。
 
 - eureka.client.register-with-eureka：由于该应用为注册中心，所以设置 为false，代表不向注册中心注册自己。
 - eureka.client.fetch-registry： 由于注册中心的职责就是维护服务实例，它并不需要去检索服务，所以也设置为false
 
-在完成了上面的配置后，启动应用并访问http://localhost:1111／。可以看到如
+在完成了上面的配置后，启动应用并访问http://localhost:1111/。可以看到如
 下图所示的Eureka信息面板，其中Instancescurrently registered with Eureka栏是空的，说
 明该注册中心还没有注册任何服务。
 
 ## 4 注册服务提供者
 
-	在完成了服务注册中心的搭建之后，接下来我们尝试将一个既有的Spring Boot应用加
-入Eureka的服务治理体系中去。
-	可以使用上一章中实现的快速入门工程来进行改造， 将其作为一个微服务应用向服务
-注册中心发布自己。首先， 修改pom.xml， 增加Spring Cloud Eureka模块的依赖， 具体代
+在完成了服务注册中心的搭建之后，接下来我们尝试将一个既有的Spring Boot应用加入Eureka的服务治理体系中去。
+	首先，新建eureka-client-helloworld 修改pom.xml， 增加Spring Cloud Eureka模块的依赖， 具体代
 码如下所示：
 
 ```java
-<parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>1.5.6.RELEASE</version>
-        <relativePath/> <!-- lookup parent from repository -->
-    </parent>
-
-    <properties>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <java.version>1.8</java.version>
-    </properties>
-    <dependencies>
-    	<dependency>
+ <dependencies>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
-    
+
+        <!-- eureka client 依赖-->
         <dependency>
-			<groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-eureka</artifactId>
-		</dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
     </dependencies>
-    <dependencyManagement>
-		<dependencies>
-			<dependency>
-				<groupId>org.springframework.cloud</groupId>
-				<artifactId>spring-cloud-dependencies</artifactId>
-				<version>${spring-cloud.version}</version>
-				<type>pom</type>
-				<scope>import</scope>
-			</dependency>
-		</dependencies>
-	</dependencyManagement>
-	<build>
-		<plugins>
-			<plugin>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-maven-plugin</artifactId>
-			</plugin>
-		</plugins>
-	</build>
 ```
 
-	接着， 改造／hello请求处理接口， 通过注入DiscoveryClient对象， 在日志中打印出服务的相关内容。
+新建controller  创建/hello请求处理接口， 通过注入DiscoveryClient对象， 在日志中打印出服务的相关内容。
 
 ```java
 @RestController
@@ -196,9 +184,10 @@ public class UserController {
 }
 ```
 
-	然后， 在主类中通过加上＠EnableDiscoveryClient注解， 激活Eureka中的
+然后， 在主类中通过加上＠EnableDiscoveryClient注解， 激活Eureka中的
+
 DiscoveryClient实现〈自动化配置， 创建DiscoveryClient接口针对Eureka客户
-端的EurekaDiscoveryClient实例〉， 才能实现上述Con位oller中对服务信息的
+端的EurekaDiscoveryClient实例〉， 才能实现上述Controller中对服务信息的
 
 ```java
 @SpringBootApplication
@@ -210,7 +199,7 @@ public class ApplicationServerProvider {
 }
 ```
 
-	最后， 我们需要在 application.properties 配置文件中， 通过 spring. application ．口ame 属性来为服务命名， 比如命名为 hello-service。再通过 eureka .client.serviceUrl.defaultZone 属性来指定服务注册中心的地址， 这里我们指定为之前构建的服务注册中心地址， 完整配置如下所示：
+最后， 我们需要在 application.yml 配置文件中， 通过 spring.application.name 属性来为服务命名， 比如命名为 hello-service。再通过 eureka .client.serviceUrl.defaultZone 属性来指定服务注册中心的地址， 这里我们指定为之前构建的服务注册中心地址， 完整配置如下所示：
 
 ```java
 spring.application.name=hello-service
@@ -218,13 +207,13 @@ eureka.client.serviceUrl.defaultZone=http://localhost:1111/eureka
 ```
 
 	下面我们分别启动服务注册中心以及这里改造后的 hello-service 服务。 在 hello-service服务控制台中，Torr则启动之后，com.netflix.discovery.DiscoveryClient 对象打印了该服务的注册信息，表示服务注册成功。
-
+	
 	而此时在服务注册中心的控制台中，可以看到类似下面的输出，名为hello-service 的服务被注册成功了。
 
 ## 5 高可用注册中心
 
 	在微服务架构这样的分布式环境中，我们需要充分考虑发生故障的情况，所以在生产环境中必须对各个组件进行高可用部署，对于微服务如此，对于服务注册中心也一样。但 是到本节为止，我们一直都在使用单节点的服务注册中心，这在生产环境中显然并不合适， 我们需要构建高可用的服务注册中心以增强系统的可用性。
-
+	
 	Eureka Server的设计一开始就考虑了高可用问题，在Eureka的服务治理设计中，所有 节点即是服务提供方，也是服务消费方，服务注册中心也不例外。是否还记得在单节点的配置中，我们设置过下面这两个参数，让服务注册中心不注册自己：
 
 ```java
@@ -340,7 +329,7 @@ Spring Boot 应用纳入Eureka 的服务治理体系，成为服务提供者或�
 
 ### 7.2 服务治理机制
 
-​	在体验了Spring Cloud Eureka 通过简单的注解配置就能实现强大的服务治理功能之后， 我们来进一步了解一下Eureka 基础架构中各个元素的一些通信行为，以此来理解基于Eureka 实现的服务治理体系是如何运作起来的。以下图为例， 其中有这样几个重要元素：
+	在体验了Spring Cloud Eureka 通过简单的注解配置就能实现强大的服务治理功能之后， 我们来进一步了解一下Eureka 基础架构中各个元素的一些通信行为，以此来理解基于Eureka 实现的服务治理体系是如何运作起来的。以下图为例， 其中有这样几个重要元素：
 
 -  “服务注册中心－1 ＇＇和“ 服务注册中心－2飞它们互相注册组成了高可用集群。
 - “ 服务提供者” 启动了两个实例， 一个注册到“ 服务注册中心，1 ” 上， 另外一个注册到“ 服务注册中心－2 ” 上。
@@ -356,7 +345,7 @@ Spring Boot 应用纳入Eureka 的服务治理体系，成为服务提供者或�
 #### 7.31 服务注册
 
 	“服务提供者” 在启动的时候会通过发送REST请求的方式将自己注册到Eureka Server上， 同时带上了自身服务的一些元数据信息。Eureka Server接收到这个REST请求之后，将元数据信息存储在一个双层结构Map中， 其中第一层的key是服务名， 第二层的key是具体服务的实例名。（我们可以回想一下之前在实现Ribbon负载均衡的例子中， Eureka信息面板中一个服务有多个实例的情况， 这些内容就是以这样的双层Map形式存储的。）
-
+	
 	在服务注册时， 需要确认一下eureka.client.register-with-eureka=true参数是否正确， 该值默认为true。若设置为fals e将不会启动注册操作。
 
 #### 7.3.2  服务同步
@@ -366,7 +355,7 @@ Spring Boot 应用纳入Eureka 的服务治理体系，成为服务提供者或�
 #### 7.3.3 服务续约
 
 	在注册完服务之后，服务提供者会维护一个心跳用来持续告诉EurekaServer： “ 我还活着” ，以防止Eureka Server 的“ 剔除任务” 将该服务实例从服务列表中排除出去， 我们称该操作为服务续约（Renew）。
-
+	
 	关于服务续约有两个重要属性， 我们可以关注并根据需要来进行调整：
 
 ```java
@@ -382,13 +371,13 @@ eureka.instance.lease-expiration-duration-in-seconds=90
 #### 7.4.1 获取服务
 
 	到这里， 在服务注册中心已经注册了一个服务， 并且该服务有两个实例。当我们启动服务消费者的时候， 它会发送一个REST请求给服务注册中心， 来获取上面注册的服务清单。为了’性能考虑， Eureka Server会维护一份只读的服务清单来返回给客户端， 同时该缓存清单会每隔30秒更新一次。
-
+	
 	获取服务是服务消费者的基础，所以必须确保eureka.client.fetch-registry=true参数没有被修改成false，该值默认为true。若希望修改缓存清单的更新时间， 可以通过eureka.client.registry-fetch-interval-seconds=30参数进行修改，该参数默认值为30， 单位为秒。
 
 #### 7.4.2 服务调用
 
 	服务消费者在获取服务清单后， 通过服务名可以获得具体提供服务的实例名和该实例的元数据信息。因为有这些服务实例的详细信息， 所以客户端可以根据自己的需要决定具体调用哪个实例，在Ribbon中会默认采用轮询的方式进行调用，从而实现客户端的负载均衡。
-
+	
 	对于访问实例的选择， Eureka中有Region和Zone的概念， 一个Region中可以包含多个Zone， 每个服务客户端需要被注册到一个Zone中， 所以每个客户端对应一个Region和一个Zone。在进行服务调用的时候， 优先访问同处一个Zone 中的服务提供方，若访问不到， 就访问其他的Zone， 更多关于Region和Zone的知识， 我们会在后续的源码解读中介绍。
 
 #### 7.4.3 服务下线
@@ -404,17 +393,17 @@ eureka.instance.lease-expiration-duration-in-seconds=90
 #### 7.5.2 自我保护
 
 	当我们在本地调试基于Eureka的程序时， 基本上都会碰到这样一个问题， 在服务注册中心的信息面板中出现类似下面的红色警告信息：
-
+	
 	实际上， 该警告就是触发了EurekaServer的自我保护机制。之前我们介绍过， 服务注册到EurekaServer 之后， 会维护一个心跳连接，告诉EurekaServer自己还活着。EurekaServer在运行期间，会统计心跳失败的比例在15分钟之内是否低于85 %，如果出现低于的情况〈在单机调试的时候很容易满足， 实际在生产环境上通常是由于网络不稳定导致）, EurekaServer会将当前的实例注册信息保护起来，让这些实例不会过期， 尽可能保护这些注册信息。但是， 在这段保护期间内实例若出现问题， 那么客户端很容易拿到实际己经不存在的服务实例， 会出现调用失败的情况， 所以客户端必须要有容错机制， 比如可以使用请求重试、断路器等机制。
-
+	
 	由于本地调试很容易触发注册中心的保护机制， 这会使得注册中心维护的服务实例不那么准确。所以， 我们在本地进行开发的时候， 可以使用eureka.server.enableself-preservatio口＝ false参数来关闭保护机制，以确保注册中心可以将不可用的实例正确剔除。
 
 ## 8 源码分析
 
 	上面， 我们对Eureka 中各个核心元素的通信行为做了详细的介绍， 相信大家已经对Eureka 的运行机制有了一定的了解。为了更深入地理解它的运作和配置， 下面我们结合源码来分别看看各个通信行为是如何实现的。
-
+	
 	在看具体源码之前， 我们先回顾 下之前所实现的内容， 从而找到 个合适的切入口去分析。首先， 对于服务注册中心、服务提供者、服务消费者这三个主要元素来说， 后两者（也就是Eureka 客户端〉在整个运行机制中是大部分通信行为的主动发起者， 而注册中心主要是处理请求的接收者。所以，我们可以从Eureka的客户端作为入口看看它是如何完成这些主动通信行为的。
-
+	
 	我们在将一个普通的Spring Boot 应用注册到Eureka Server 或是从Eureka Server中获取服务列表时， 主要就做了两件事：
 
 - 在应用主类中配置了＠EnableDiscoveryClient注解。
@@ -438,9 +427,9 @@ public @interface EnableDiscoveryClient {
 ![DiscoveryClient](/images/SpringCloud/SpringCloud_discoveryClient.png)
 
 	其中， 左边的org.springframework.cloud.client.discovery.DiscoveryClient是Spring Cloud的接口，它定义了用来发现服务的常用抽象方法， 通过该接口可以有效地屏蔽服务治理的实现细节，所以使用Spring Cloud构建的微服务应用可以方便地切换不同服务治理框架， 而不改动程序代码，只需要另外添加一些针对服务治理框架的配置即可。org.springframework.cloud. netflix.eureka .EurekaDiscoveryClient 是对该接口的实现，从命名来判断， 它实现的是对Eureka 发现服务的封装。所以EurekaDiscoveryClient依赖了Netflix Eureka的com. net flix.discovery.EurekaClient接口，EurekaClient继承了LookupService接口，它们都是Netflix开源包中的内容，主要定义了针对Eureka的发现服务的抽象方法，而真正实现发现服务的则是Netflix包中的com. netflix.discovery. DiscoveryClient类。
-
-	接下来，我们就来详细看看DiscoveryClient类吧。先解读一下该类头部的注释，注释的大致内容如下所示：![DiscoveryClient-class](/images/SpringCloud/SpringCloud_discoveryClient-class.png)
 	
+	接下来，我们就来详细看看DiscoveryClient类吧。先解读一下该类头部的注释，注释的大致内容如下所示：![DiscoveryClient-class](/images/SpringCloud/SpringCloud_discoveryClient-class.png)
+
 
 ```java
 /** @deprecated */  // DiscoveryClient
@@ -664,7 +653,7 @@ boolean renew() {
 ### 8.5 服务注册中心处理
 
 	通过上面的源码分析， 可以看到所有的交互都是通过 REST 请求来发起的。 下面我们来看看服务注册中心对这些请求的处理。 Eureka Server 对于各类 REST 请求的定义都位于 com.netflix.eureka.resources 包下。
-
+	
 	以“服务注册服务为例”  
 
 ```java
@@ -696,15 +685,15 @@ boolean renew() {
 ```
 
 	在注册函数中， 先调用 publishEvent 函数， 将该新服务注册的事件传播出去， 然后调用 com.netflix.eureka.registry.AbstractinstanceRegistry 父类中的注册实现，将 InstanceInfo 中的元数据信息存储在 一个 ConcurrentHashMap对象中。正如我们之前所说的， 注册中心存储了两层 Map 结构， 第一 层的 key 存储服务名：InstanceInfo中的appName 属性， 第二层的key 存储实例名：InstanceInfo中的instanceId属性。
-
+	
 	服务端的请求和接收非常类似，对于其他的服务端处理， 这里不再展开叙述， 读者可以根据上面的脉络来自己查看其内容（这里包含很多细节内容〉来帮助和加深理解。
 
 ## 9 配置详解
 
 	在分析了Eureka的部分源码 之后， 相信大家对Eureka的服务治理机制已经有了进一步的理解。 在本节中， 我们从使用的角度对Eureka中一些常用配置内容进行详细的介绍，以帮助我们根据自身环境与业务特点来进行个性化的配置调整。
-
+	
 	在Eureka的服务治理体系中， 主要分为服务端与客户端两个不同的角色， 服务端为服务注册中心， 而客户端为各个提供接口的微服务应用。当我们构建了高可用的注册中心之后， 该集群中所有的微服务应用和后续将要介绍的一些基础类应用（如配置中心、API网关等〉都可以视作该体系下的一个微服务（Eureka客户端〉。服务注册中心也一样， 只是高 可用环境下的服务注册中心除了作为客户端之外， 还为集群中的其他客户端提供了服务注 册的特殊功能。所以，Eureka客户端的配置对象存在于所有Eureka服务治理体系下的应用实例中。在实际使用Spring Cloud Eureka的过程中，我们所做的配置内容几乎都是对Eureka 客户端配置进行的操作， 所以了解这部分的配置内容， 对于用好Eureka非常有帮助。
-
+	
 	Eureka客户端的配置主要分为以下两个方面。
 
 - 服务注册相关的配置信息， 包括服务注册中心的地址、服务获取的问隔时间、可用区域等。
@@ -775,7 +764,7 @@ eureka.client.serviceUrl.defaultZone=http://localhost:8000/eureka/,http://localh
 ### 11.1 元数据
 
 	在org.springframework.cloud.netflix.eureka.EurekainstanceConfigBean 的配置信息中，有一大部分内容都是对服务实例元数据的配置，那么什么是服务实例的元 数据呢？它是Eureka客户端在向服务注册中心发送注册请求时，用来描述自身服务信息的对象，其中包含了一些标准化的元数据，比如服务名称、实例名称、实例E、实例端口等用于服务治理的重要信息；以及一些用于负载均衡策略或是其他特殊用途的自定义元数据 信息。
-
+	
 	在使用SpringCloud Eureka的时候，所有的配置信息都通过org.springframework.
 cloud.netflix.eureka.EurekainstanceConfigBean进行加载，但在真正进行服务注册的时候，还是会包装成com.netflix.appinfo.Instanceinfo对象发送给 Eureka服务端。这两个类的定义非常相似，我们可以直接查看com.netflix.appinfo.Instanceinfo类中的详细定义来了解原生Eureka对元数据的定义。其中，Map<String, String> metadata = newConcurrentHashMap<String, String> () 是自定义的元数据信息，而其他成员变量则是标准化的元数据信息。SpringCloud的
 EurekainstanceConfigBean对原生元数据对象做了一些配置优化处理，在后续的介绍中，我们也会提到这些内容。
@@ -807,7 +796,7 @@ eureka.instance.instanceId=${spring.application.name}:${random.int}
 ### 11.3 端点配置
 
 	在 InstanceInfo 中， 我们可以看到一些 URL 的配置信息，比如 homePageUrl、 statusPageUrl、healthCheckU址，它们分别代表了应用主页的 URL、状态页的 URL 、健康检查的 URL。 其中，状态页和健康检查的 URL 在 Spring Cloud Eureka 中默认使用了 spring-boot-actuator 模块提供的/info 端点和／health 端点。 虽然我们在之前的示例中并没有对这些端点做具体的设置，但是实际上这些 URL 地址的配置非常重要。 为了 服务的正常运作， 我们必须确保 Eureka 客户端的／health 端点在发送元数据的时候，是一个能够被注册中心访问到的地址，否则服务注册中心不会根据应用的健康检查来更改状态（仅当开启了 healthcheck 功能时，以该端点信息作为健康检查标准〉。 而／info端 点如果不正确的话，会导致在 Eureka 面板中单击服务实例时，无法访问到服务实例提供的信息接口。
-
+	
 	大多数情况下，我们并不需要修改这几个 URL 的配置，但是在一些特殊情况下，比如，为应用设置了 context-path，这时，所有 spring-boot-actuator 模块的监控端点 都会增加一个前缀。 所以， 我们就需要做类似如下的配置，为／info和／health 端点也加上类似的前缀信息：
 
 ```java
@@ -839,7 +828,7 @@ eureka.instance.homePageUrl=https://${eureka.instance.hostname}
 ### 11.4 健康检查
 
 	默认情况下，Eureka中各个服务实例的健康检测并不是通过spring-boot-actuator模块的／health 端点来实现的，而是依靠客户端心跳的方式来保持服务实例的存活。 在Eureka 的服务续约与剔除机制下，客户端的健康状态从注册到注册中心开始都会处于UP状态， 除非心跳终止 段时间之后，服务注册中心将其剔除 。默认的心跳实现方式可以有数微服务应用都会有 些其他的夕阳日资源依赖， 比如数据库、 缓存、 消息代理等，如果我们的应用与这些外部资源无法联通的时候，实际上已经不能提供正常的对外服务了，但是因为客户端心跳依然在运行，所以它还是会被服务消费者调用，而这样的调用实际上并不能获得预期的结果。
-
+	
 	在Spring Cloud Eureka中，我们可以通过简单的配置，把Eureka客户端的健康检测交给spring-boot-actuator模块的／health端点，以实现更加全面的健康状态维护。详细的配置步骤如下所示：
 
 - 在pom.xml中引入spring-boot-starter-actuator模块的依赖
@@ -867,9 +856,9 @@ eureka.instance.homePageUrl=https://${eureka.instance.hostname}
 ## 11.6 跨平台支持
 
 	在“Eureka详解”一节中，我们对SpringCloud Eureka的源码做了较为详细的分析，在分析过程中相信大家己经发现，Eureka的通信机制使用了HTTP的阻ST接口实现，这也是Eureka同其他服务注册工具的一个关键不同点。由于HTTP的平台无关性，虽然Eureka Server通过Java实现，但是在其下的微服务应用并不限于使用Java来进行开发。
-
+	
 	跨平台本身就是微服务架构的九大特性之一，只有实现了对技术平台的透明，才能更好地发挥不同语言对不同业务处理能力的优势，从而打造更为强大的大型系统。
-
+	
 	目前除了Eureka的Java客户端之外，还有很多其他语言平台对其的支持，比如eureka-js-client、python-eureka等。若我们有志于自己为一门语言来开发客户端程序，也并非特别复杂，只需要根据上面提到的那些用户服务协调的通信请求实现就能实现服务的注册与发现，需要了解更多关于阳eka的RESTAPI内容可以查看Eureka宫方WiKi中的Eurekcz-REST-operations一文htφs://github.com/Netflix/eureka/wiki/Eureka-REST-operationso
 
 ### 11.6.1 通信协议
@@ -885,8 +874,8 @@ eureka.instance.homePageUrl=https://${eureka.instance.hostname}
 - XS位earn是用来将对象序列化成泊位（JSON）或反序列化为对象的一个Java类库。 XStream在运行时使用Java反射机制对要进行序列化的对象树的结构进行探索，并不需要对对象做出修改XStream可以序列化内部字段，包括private和final字段并且支持非公开类以及内部类。默认情况下，XS位earn不需要配置映射关系，对象和字段将映射为同名XML元素。但是当对象和字段名与XML中的元素名不同时， XStream支持指定别名。XStream支持以方法调用的方式，或是Java标注的方式指定别名。XStream在进行数据类型转换时，使用系统默认的类型转换器。同时，也支持用户自定义的类型转换器
 
   	JAX-RS是将在JavaEE 6中引入的一种新技术。JAX-RS即JavaAPI for 
-  RESTful Web Services，是一个Java编程语言的应用程序接口，支持按照表述性状
-  态转移（REST）架构风格创建Web服务。只X-RS使用了JavaSE 5引入的Java 标注来简化Web服务的客户端和服务端的开发和部署。包括：
+    RESTful Web Services，是一个Java编程语言的应用程序接口，支持按照表述性状
+    态转移（REST）架构风格创建Web服务。只X-RS使用了JavaSE 5引入的Java 标注来简化Web服务的客户端和服务端的开发和部署。包括：
 
   - @Path，标注资源类或者方法的相对路径。
   - @GET、＠PUT、＠POST、＠DELETE，标注方法是HTTP请求的类型。
