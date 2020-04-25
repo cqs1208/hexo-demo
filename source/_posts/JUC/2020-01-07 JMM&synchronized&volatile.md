@@ -1,6 +1,6 @@
 ---
 layout: post
-title: 01 JMM&synchronized&volatile
+title: JMM&synchronized&volatile
 tags:
 - JUC
 categories: JUC

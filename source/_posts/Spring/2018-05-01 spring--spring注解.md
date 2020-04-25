@@ -37,7 +37,7 @@ public @interface Override {
 }
 ```
 
-​	从注释，我们可以看出，@Override的作用是，提示编译器，使用了@Override注解的方法必须override父类或者java.lang.Object中的一个同名方法。我们看到@Override的定义中使用到了 @Target, @Retention，它们就是所谓的“**元注解**”——就是定义注解的注解，
+	从注释，我们可以看出，@Override的作用是，提示编译器，使用了@Override注解的方法必须override父类或者java.lang.Object中的一个同名方法。我们看到@Override的定义中使用到了 @Target, @Retention，它们就是所谓的“**元注解**”——就是定义注解的注解，
 
 ### 2 @Retention
 
@@ -131,7 +131,7 @@ public @interface Documented {
 
 ## 3 自定义注解
 
-​	有了元注解，那么我就可以使用它来自定义我们需要的注解。结合自定义注解和AOP或者过滤器，是一种十分强大的武器。比如可以使用注解来实现权限的细粒度的控制——在类或者方法上使用权限注解，然后在AOP或者过滤器中进行拦截处理。下面是一个关于登录的权限的注解的实现：
+	有了元注解，那么我就可以使用它来自定义我们需要的注解。结合自定义注解和AOP或者过滤器，是一种十分强大的武器。比如可以使用注解来实现权限的细粒度的控制——在类或者方法上使用权限注解，然后在AOP或者过滤器中进行拦截处理。下面是一个关于登录的权限的注解的实现：
 
 ```java
 /**
@@ -144,7 +144,7 @@ public @interface NoLogin {
 }
 ```
 
-​	我们自定义了一个注解 @NoLogin, 可以被用于 方法 和 类 上，注解一直保留到运行期，可以被反射读取到。该注解的含义是：被 @NoLogin 注解的类或者方法，即使用户没有登录，也是可以访问的。下面就是对注解进行处理了：
+	我们自定义了一个注解 @NoLogin, 可以被用于 方法 和 类 上，注解一直保留到运行期，可以被反射读取到。该注解的含义是：被 @NoLogin 注解的类或者方法，即使用户没有登录，也是可以访问的。下面就是对注解进行处理了：
 
 ```java
 /**
@@ -209,79 +209,308 @@ noLogin = handlerMethod.getMethod().getDeclaringClass().getAnnotation(NoLogin.cl
 
 ## 4 spring常用注解
 
-​	注解本身没有功能的，就和 xml 一样。注解和 xml 都是一种元数据，元数据即解释数据的数据，这就是所谓配置。
+### @Configuration @Bean
 
-### 1 声明bean的注解
+```java
+@Configuration
+public class MainConfig {
+    @Bean
+    public Person person(){
+        return new Person(); 
+    }
+}
+```
 
-@Component 组件，没有明确的角色
+**注意:** 通过@Bean的形式是使用的话， bean的默认名称是方法名，若@Bean(value="bean的名称")
+那么bean的名称是指定的
 
-@Service 在业务逻辑层使用（service层）
+去容器中读取Bean的信息(传入配置类)
 
-@Repository 在数据访问层使用（dao层）
+```java
+public static void main( String[] args ) {
+    AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext(MainConfig.class);
+    System.out.println(ctx.getBean("person")); 
+}
+```
 
-@Controller 在展现层使用，控制器的声明（C）
+### @CompentScan
 
-### 2 注入bean的注解
+在配置类上写@CompentScan注解来进行包扫描
 
-@Autowired：由Spring提供
+```java
+@Configuration
+@ComponentScan(basePackages = {"com.tuling.testcompentscan"}) 
+public class MainConfig {
+}
+```
 
-@Inject：由JSR-330提供
+1:排除用法 excludeFilters(排除@Controller注解的,和TulingService的)
 
-@Resource：由JSR-250提供
+```java
+@Configuration
+@ComponentScan(basePackages = {"com.tuling.testcompentscan"},excludeFilters = {
+@ComponentScan.Filter(type = FilterType.ANNOTATION,value = {Controller.class}),
+@ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE,value = {TulingService.class}) })
+public class MainConfig { }
+```
 
-都可以注解在set方法和属性上，推荐注解在属性上（
+2:包含用法 includeFilters ,注意，若使用包含的用法，需要把useDefaultFilters属性设置为false(true表 示扫描全部的) 
 
-### 3 java配置类相关注解
+```java
+ @Configuration
+@ComponentScan(basePackages = {"com.tuling.testcompentscan"},includeFilters = {
+@ComponentScan.Filter(type = FilterType.ANNOTATION,value = {Controller.class, Service.class}) },useDefaultFilters = false)
+public class MainConfig {
+}
+```
 
-@Configuration 声明当前类为配置类，相当于xml形式的Spring配置（类上）
+### @Scope
 
-@Bean 注解在方法上，声明当前方法的返回值为一个bean，替代xml中的方式（方法上）
+配置Bean的作用域对象
 
-@Configuration 声明当前类为配置类，其中内部组合了@Component注解，表明这个类是一个bean（类上）
+1:在不指定@Scope的情况下，所有的bean都是单实例的bean,而且是饿汉加载(容器启动实例就创建 好了) 
 
-@ComponentScan 用于对Component进行扫描，相当于xml中的（类上）
+```java
+@Bean
+public Person person() {
+	return new Person(); 
+}
+```
 
-@WishlyConfiguration 为@Configuration与@ComponentScan的组合注解，可以替代这两个注解
+2:指定@Scope为 prototype 表示为多实例的，而且还是懒汉模式加载(IOC容器启动的时候，并不会创建对象，是
+在第一次使用的时候才会创建)
 
-### 4 切面AOP相关注解
+```java
+@Bean
+@Scope(value = "prototype") public Person person() {
+	return new Person(); 
+}
+```
 
-@Aspect 声明一个切面（类上）
+3:@Scope指定的作用域方法取值
 
-使用@After、@Before、@Around定义建言（advice），可直接将拦截规则（切点）作为参数。
+a) singleton 单实例的(默认)
+b) prototype 多实例的
+c) request 同一次请求
+d) session 同一个会话级别
 
-@After 在方法执行之后执行（方法上）
+### @Lazy
 
-@Before 在方法执行之前执行（方法上）
+Bean的懒加载@Lazy(主要针对单实例的bean 容器启动的时候，不创建对象，在第一次使用的时候才会创建该象)
 
-@Around 在方法执行之前与之后执行（方法上）
+```java
+@Bean
+@Lazy
+public Person person() {
+	return new Person(); 
+}
+```
 
-@PointCut 声明切点
+### @Conditional
 
-在java配置类中使用@EnableAspectJAutoProxy注解开启Spring对AspectJ代理的支持（类上）
+@Conditional进行条件判断等.
 
-### 5 @Bean的属性支持
+场景,有二个组件TulingAspect 和TulingLog ，我的TulingLog组件是依赖于TulingAspect的组件
 
-@Scope 设置Spring容器如何新建Bean实例（方法上，得有@Bean）
+应用:自己创建一个TulingCondition的类 实现Condition接口
 
-其设置类型包括：
+```java
+public class TulingCondition implements Condition {
+/**
+* @param context
+* @param metadata * @return
+*/
+@Override
+public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
+    //判断容器中是否有tulingAspect的组件 	
+    if(context.getBeanFactory().containsBean("tulingAspect")) {
+        return true; 
+    }
+	return false; 
+	}
+}
 
-Singleton （单例,一个Spring容器中只有一个bean实例，默认模式）,
 
-Protetype （每次调用新建一个bean）,
+public class MainConfig {
+    @Bean
+    public TulingAspect tulingAspect() {
+    	return new TulingAspect(); 
+    }
+    
+    //当切 容器中有tulingAspect的组件，那么tulingLog才会被实例化. @Bean
+    @Conditional(value = TulingCondition.class)
+    public TulingLog tulingLog() {
+    	return new TulingLog(); 
+    }
+}
+```
 
-Request （web项目中，给每个http request新建一个bean）,
+### 往IOC 容器中添加组件
 
-Session （web项目中，给每个http session新建一个bean）,
+1:通过@CompentScan +@Controller @Service @Respository @compent 
 
-GlobalSession（给每一个 global http session新建一个Bean实例）
+​	适用场景: 针对我们自己写的组件可以通过该方式来进行加载到容器中。 
 
-@StepScope 在Spring Batch中还有涉及
+2:通过@Bean的方式来导入组件(适用于导入第三方组件的类) 
 
-@PostConstruct 由JSR-250提供，在构造函数执行完之后执行，等价于xml配置文件中bean的initMethod
+3:通过@Import来导入组件 (导入组件的id为全类名路径) 
 
-@PreDestory 由JSR-250提供，在Bean销毁之前执行，等价于xml配置文件中bean的destroyMethod
+```java
+@Configuration
+@Import(value = {Person.class, Car.class}) 
+public class MainConfig {
+}
+```
 
-### 6 @Value注解
+通过@Import 的ImportSeletor类实现组件的导入 (导入组件的id为全类名路径)
+
+```java
+public class TulingImportSelector implements ImportSelector { 
+  //可以获取导入类的注解信息
+    @Override
+    public String[] selectImports(AnnotationMetadata importingClassMetadata) {
+    	return new String[]{"com.tuling.testimport.compent.Dog"}; 
+    }
+} 
+
+@Configuration
+@Import(value = {Person.class, Car.class, TulingImportSelector.class}) public class 	MainConfig {
+}
+```
+
+通过@Import的 ImportBeanDefinitionRegister导入组件 (可以指定bean的名称)
+
+```java
+public class TulingBeanDefinitionRegister implements ImportBeanDefinitionRegistrar { @Override
+public void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) { 
+    //创建一个bean定义对象
+    RootBeanDefinition rootBeanDefinition = new RootBeanDefinition(Cat.class);
+    //把bean定义对象导入到容器中
+    registry.registerBeanDefinition("cat",rootBeanDefinition); 
+    }
+}
+
+@Configuration
+//@Import(value = {Person.class, Car.class})
+//@Import(value = {Person.class, Car.class, TulingImportSelector.class})
+@Import(value = {Person.class, Car.class, TulingImportSelector.class, TulingBeanDefinitionRegister.class}) public class MainConfig {
+}
+```
+
+4:通过实现FacotryBean接口来实现注册 组件
+
+```java
+public class CarFactoryBean implements FactoryBean<Car> {
+    //返回bean的对象
+    @Override
+    public Car getObject() throws Exception {
+        return new Car(); 
+    }
+    //返回bean的类型
+    @Override
+    public Class<?> getObjectType() {
+        return Car.class; 
+    }
+    //是否为单例
+    @Override
+    public boolean isSingleton() {
+        return true; 
+    }
+}
+```
+
+### Bean的初始化和销毁
+
+bean的创建----->初始化----->销毁方法
+由容器管理Bean的生命周期，我们可以通过自己指定bean的初始化方法和bean的销毁方法
+
+```java
+@Configuration
+public class MainConfig {
+    //指定了bean的生命周期的初始化方法和销毁方法.
+    @Bean(initMethod = "init",destroyMethod = "destroy") 
+    public Car car() {
+		return new Car(); 
+    }
+}
+```
+
+针对单实例bean的话，容器启动的时候，bean的对象就创建了，而且容器销毁的时候，也会调用Bean的销毁方法 
+
+针对多实例bean的话,容器启动的时候，bean是不会被创建的而是在获取bean的时候被创建，而且bean的销毁不受 IOC容器的管理. 
+
+2:通过 InitializingBean和DisposableBean 的二个接口实现bean的初始化以及销毁方法
+
+```java
+@Component
+public class Person implements InitializingBean,DisposableBean {
+    public Person() { 
+        System.out.println("Person的构造方法");
+    }
+    @Override
+    public void destroy() throws Exception {
+    	System.out.println("DisposableBean的destroy()方法 "); 
+    }
+    @Override
+    public void afterPropertiesSet() throws Exception {
+    	System.out.println("InitializingBean的 afterPropertiesSet方法"); 
+    }
+}
+```
+
+3:通过JSR250规范 提供的注解@PostConstruct 和@ProDestory标注的方法
+
+```java
+@Component 
+public class Book {
+    public Book() {
+    	System.out.println("book 的构造方法");
+    }
+    @PostConstruct 
+    public void init() {
+    	System.out.println("book 的PostConstruct标志的方法"); 
+    }
+    @PreDestroy
+    public void destory() {
+    	System.out.println("book 的PreDestory标注的方法"); 
+    }
+}
+```
+
+4:通过Spring的BeanPostProcessor的 bean的后置处理器会拦截所有bean创建过程
+
+postProcessBeforeInitialization 在init方法之前调用
+postProcessAfterInitialization 在init方法之后调用
+
+```java
+@Component
+public class TulingBeanPostProcessor implements BeanPostProcessor {
+    @Override
+    public Object postProcessBeforeInitialization(Object bean, String beanName) {  			System.out.println("postProcessBeforeInitialization:"+beanName);
+    	return bean; 
+    }
+    @Override
+    public Object postProcessAfterInitialization(Object bean, String beanName) {
+ 		System.out.println("postProcessAfterInitialization:"+beanName);
+    	return bean; 
+    }
+}
+```
+
+BeanPostProcessor的执行时机
+
+```java
+populateBean(beanName, mbd, instanceWrapper) 
+initializeBean{
+	applyBeanPostProcessorsBeforeInitialization() invokeInitMethods{
+	isInitializingBean.afterPropertiesSet
+	自定义的init方法 
+    }
+applyBeanPostProcessorsAfterInitialization()方法 
+}
+```
+
+### @Value @PropertySource
 
 注入普通字符
 
@@ -339,25 +568,109 @@ Resource url;
 @PropertySource("classpath:com/hgs/hello/test.properties")
 ```
 
-### 7 环境切换
+使用示例：
 
-@Profile 通过设定Environment的ActiveProfiles来设定当前context需要使用的配置环境。（类或方法上）
+```java
+public class Person {
+//通过普通的方式 @Value("司马")
+private String firstName;
+    //spel方式来赋值 
+    @Value("#{28-8}")
+    private Integer age; 通过读取外部配置文件的值 
+    @Value("${person.lastName}") 
+    private String lastName;
+}
 
-@Conditional Spring4中可以使用此注解定义条件话的bean，通过实现Condition接口，并重写matches方法，从而决定该bean是否被实例化。（方法上）
+```
 
-### 8 异步相关
+```java
+@Configuration
+@PropertySource(value = {"classpath:person.properties"}) 
+    //指定外部文件的位置 public class MainConfig {
+    @Bean
+    public Person person() {
+   	 	return new Person(); 
+    }
+}
+```
 
-@EnableAsync 配置类中，通过此注解开启对异步任务的支持，叙事性AsyncConfigurer接口（类上）
+### @Profile
 
-@Async 在实际执行的bean方法使用该注解来申明其是一个异步任务（方法上或类上所有的方法都将异步，需要@EnableAsync开启异步任务）
+通过@Profile注解 来根据环境来激活标识不同的Bean
 
-### 9 定时任务相关
+@Profile标识在类上，那么只有当前环境匹配，整个配置类才会生效
+@Profile标识在Bean上 ，那么只有当前环境的Bean才会被激活,没有标志为@Profile的bean 不管在什么环境都可以被激活
 
-@EnableScheduling 在配置类上使用，开启计划任务的支持（类上）
+```java
+@Configuration
+@PropertySource(value = {"classpath:ds.properties"})
+public class MainConfig implements EmbeddedValueResolverAware {
+	@Value("${ds.username}") 
+    private String userName;
+	@Value("${ds.password}") 
+    private String password;
+	private String jdbcUrl; 
+    private String classDriver;
+    
+    @Override
+    public void setEmbeddedValueResolver(StringValueResolver resolver) {
+   		this.jdbcUrl = resolver.resolveStringValue("${ds.jdbcUrl}");
+    	this.classDriver = resolver.resolveStringValue("${ds.classDriver}"); 
+    }
+    //标识为测试环境才会被装配 @Bean
+    @Profile(value = "test") public DataSource testDs() {
+    	return buliderDataSource(new DruidDataSource()); 
+     }
+    //标识开发环境才会被激活 @Bean
+    @Profile(value = "dev") public DataSource devDs() {
+    	return buliderDataSource(new DruidDataSource()); 
+    }
+    
+    //标识生产环境才会被激活 @Bean
+    @Profile(value = "prod") 
+    public DataSource prodDs() {
+    	return buliderDataSource(new DruidDataSource()); 
+    }
+    private DataSource buliderDataSource(DruidDataSource dataSource) {
+        dataSource.setUsername(userName); 
+        dataSource.setPassword(password);
+        dataSource.setDriverClassName(classDriver); 
+        dataSource.setUrl(jdbcUrl);
+    	return dataSource; 
+    }
+}
+```
 
-@Scheduled 来申明这是一个任务，包括cron,fixDelay,fixRate等类型（方法上，需先开启计划任务的支持）
+激活切换环境的方法
 
-### 10 @Enable*注解说明
+方法一:通过运行时jvm参数来切换 -Dspring.profiles.active=test|dev|prod
+方法二:通过代码的方式来激活
+
+```java
+ public static void main(String[] args) {
+    AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext(); 		ctx.getEnvironment().setActiveProfiles("test","dev");
+	ctx.register(MainConfig.class); ctx.refresh(); 
+    printBeanName(ctx);
+}
+```
+
+### 4 切面AOP相关注解
+
+@Aspect 声明一个切面（类上）
+
+使用@After、@Before、@Around定义建言（advice），可直接将拦截规则（切点）作为参数。
+
+@After 在方法执行之后执行（方法上）
+
+@Before 在方法执行之前执行（方法上）
+
+@Around 在方法执行之前与之后执行（方法上）
+
+@PointCut 声明切点
+
+在java配置类中使用@EnableAspectJAutoProxy注解开启Spring对AspectJ代理的支持（类上）
+
+###  @Enable*注解说明
 
 这些注解主要用来开启对xxx的支持。
 
